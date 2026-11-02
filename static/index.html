@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local RAG Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: "class" };</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Inter, sans-serif; background: radial-gradient(circle at 0% 0%, #312e81 0, transparent 38%), radial-gradient(circle at 100% 100%, #581c87 0, transparent 35%), #0f172a; }
+    .mono { font-family: "JetBrains Mono", monospace; }
+    .glass { background: rgba(15, 23, 42, .72); border: 1px solid rgba(148, 163, 184, .16); backdrop-filter: blur(20px); }
+    .light .glass { background: rgba(255,255,255,.82); border-color: rgba(99,102,241,.14); }
+    .scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 99px; }
+    textarea { resize: none; }
+    @keyframes pulse { 50% { opacity: .35; } }
+    @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-5px); } }
+    .dot { animation: bounce 1.2s infinite; } .dot:nth-child(2) { animation-delay: .15s; } .dot:nth-child(3) { animation-delay: .3s; }
+    .fade { animation: fade .3s ease both; } @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  </style>
+</head>
+<body class="h-full text-slate-100 light:text-slate-900">
+  <div id="toast" class="fixed right-5 top-5 z-50 hidden max-w-sm rounded-2xl px-4 py-3 text-sm font-medium shadow-2xl"></div>
+  <header class="glass sticky top-0 z-30 border-x-0 border-t-0">
+    <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6">
+      <div class="flex items-center gap-3">
+        <div class="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-600 text-xl shadow-lg shadow-indigo-950/50">✦</div>
+        <div><h1 class="font-extrabold tracking-tight">Local RAG Studio</h1><p class="text-xs text-slate-400">Private document intelligence</p></div>
+      </div>
+      <div class="flex items-center gap-2 sm:gap-4">
+        <div id="health" class="flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold"><span id="healthDot" class="h-2 w-2 rounded-full bg-slate-500"></span><span id="healthText">Checking</span></div>
+        <span id="docBadge" class="hidden rounded-full bg-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-300 sm:inline-block">0 documents</span>
+        <button id="theme" class="rounded-xl border border-slate-700 p-2 text-slate-300 transition hover:border-indigo-400" title="Toggle theme">☼</button>
+        <button id="reset" class="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold transition hover:border-indigo-400 hover:bg-white/5">Clear chat</button>
+      </div>
+    </div>
+  </header>
+  <main class="mx-auto grid h-[calc(100vh-80px)] max-w-7xl grid-cols-1 gap-5 p-4 sm:p-6 lg:grid-cols-[310px_1fr]">
+    <aside class="glass flex min-h-0 flex-col rounded-3xl p-4">
+      <div class="mb-4 flex items-center justify-between"><div><h2 class="font-bold">Knowledge base</h2><p class="mt-1 text-xs text-slate-400">PDF, text and code · 50 MB max</p></div><span class="rounded-lg bg-indigo-500/15 px-2 py-1 text-xs text-indigo-300">LOCAL</span></div>
+      <label id="drop" for="file" class="group cursor-pointer rounded-2xl border border-dashed border-slate-600 bg-slate-900/30 p-5 text-center transition hover:border-indigo-400 hover:bg-indigo-500/10">
+        <input id="file" type="file" class="hidden" accept=".pdf,.txt,.md,.py,.js,.ts,.tsx,.jsx,.html,.css,.json,.xml,.csv,.yaml,.yml,.toml,.java,.c,.cpp,.h,.cs,.go,.rs,.rb,.php,.swift,.kt,.sql,.sh,.bat,.ps1">
+        <div class="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-xl bg-indigo-500/20 text-xl text-indigo-300 transition group-hover:scale-110">↑</div>
+        <p class="text-sm font-semibold">Drop a document here</p><p class="mt-1 text-xs text-slate-400">or click to browse</p>
+        <div id="progressWrap" class="mt-4 hidden"><div class="mb-1 flex justify-between text-[11px] text-slate-400"><span id="fileName">Uploading</span><span id="progressText">0%</span></div><div class="h-1.5 overflow-hidden rounded-full bg-slate-700"><div id="progress" class="h-full w-0 rounded-full bg-gradient-to-r from-indigo-400 to-fuchsia-400 transition-all"></div></div></div>
+      </label>
+      <div class="mb-2 mt-6 flex items-center justify-between"><h3 class="text-xs font-bold uppercase tracking-widest text-slate-400">Documents</h3><span id="docCount" class="text-xs text-slate-500">0</span></div>
+      <div id="documents" class="scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"><p class="py-8 text-center text-xs text-slate-500">No documents yet</p></div>
+      <div class="mt-4 rounded-2xl bg-indigo-500/10 p-3 text-xs leading-relaxed text-indigo-200"><b>Grounded answers</b><br><span class="text-indigo-300/70">Every response is generated only from your uploaded context.</span></div>
+    </aside>
+    <section class="glass flex min-h-0 flex-col rounded-3xl">
+      <div id="chat" class="scrollbar flex-1 space-y-5 overflow-y-auto p-4 sm:p-8">
+        <div id="welcome" class="flex h-full flex-col items-center justify-center text-center"><div class="mb-5 grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-indigo-500 to-fuchsia-600 text-3xl shadow-xl shadow-indigo-950/50">✦</div><h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Ask your documents anything</h2><p class="mt-3 max-w-md text-sm leading-6 text-slate-400">Upload a document, then ask a question. Your files and answers stay on this machine.</p></div>
+      </div>
+      <div id="typing" class="mx-4 mb-3 hidden items-center gap-2 text-xs text-slate-400 sm:mx-8"><span>Ollama is thinking</span><span class="dot h-1.5 w-1.5 rounded-full bg-indigo-400"></span><span class="dot h-1.5 w-1.5 rounded-full bg-indigo-400"></span><span class="dot h-1.5 w-1.5 rounded-full bg-indigo-400"></span></div>
+      <form id="form" class="m-4 flex items-end gap-2 rounded-2xl border border-slate-700 bg-slate-950/40 p-2 sm:m-6 sm:mt-0"><textarea id="question" rows="1" maxlength="4000" placeholder="Ask a question about your documents..." class="max-h-36 min-h-[42px] flex-1 bg-transparent px-3 py-2.5 text-sm text-slate-100 outline-none placeholder:text-slate-500"></textarea><button id="send" class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-600 text-lg shadow-lg shadow-indigo-950/40 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40" title="Send">↑</button></form>
+    </section>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    const API = location.protocol === "file:" ? "http://127.0.0.1:8000" : "";
+    const esc = value => { const node = document.createElement("span"); node.textContent = value ?? ""; return node.innerHTML; };
+    const toast = (message, error = false) => { const el = $("toast"); el.textContent = message; el.className = `fixed right-5 top-5 z-50 max-w-sm rounded-2xl px-4 py-3 text-sm font-medium shadow-2xl ${error ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"}`; setTimeout(() => el.classList.add("hidden"), 3500); };
+    const scroll = () => { const chat = $("chat"); chat.scrollTop = chat.scrollHeight; };
+    async function jsonFetch(path, options = {}) { const response = await fetch(API + path, options); let data = {}; try { data = await response.json(); } catch (_) {} if (!response.ok) throw new Error(data.detail || "Request failed"); return data; }
+    function addMessage(role, text, sources = []) {
+      $("welcome")?.remove();
+      const wrapper = document.createElement("div"); wrapper.className = `fade flex ${role === "user" ? "justify-end" : "justify-start"}`;
+      if (role === "user") wrapper.innerHTML = `<div class="max-w-[88%] rounded-2xl rounded-br-sm bg-gradient-to-br from-indigo-500 to-fuchsia-600 px-4 py-3 text-sm leading-6 shadow-lg shadow-indigo-950/30">${esc(text)}</div>`;
+      else {
+        const sourceHtml = sources.length ? `<details class="mt-4 border-t border-slate-700/60 pt-3"><summary class="cursor-pointer text-xs font-semibold text-indigo-300">${sources.length} source${sources.length === 1 ? "" : "s"} used</summary><div class="mt-3 space-y-2">${sources.map(source => `<div class="rounded-xl bg-slate-950/30 p-3"><div class="flex items-center justify-between gap-2 text-xs font-semibold"><span class="truncate text-slate-200">${esc(source.source)}</span><span class="mono shrink-0 text-[10px] text-indigo-300">chunk ${source.chunk_index} · ${(source.similarity * 100).toFixed(1)}%</span></div><p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">${esc(source.text_snippet)}</p></div>`).join("")}</div></details>` : "";
+        wrapper.innerHTML = `<div class="max-w-[92%] rounded-2xl rounded-bl-sm border border-slate-700/60 bg-slate-800/70 px-4 py-3 text-sm leading-7 text-slate-200 shadow-xl">${esc(text).replace(/\n/g, "<br>")}${sourceHtml}</div>`;
+      }
+      $("chat").appendChild(wrapper); scroll();
+    }
+    async function refreshDocuments() {
+      try {
+        const docs = await jsonFetch("/documents"); $("documents").innerHTML = ""; $("docCount").textContent = docs.length; $("docBadge").textContent = `${docs.length} document${docs.length === 1 ? "" : "s"}`;
+        if (!docs.length) { $("documents").innerHTML = `<p class="py-8 text-center text-xs text-slate-500">No documents yet</p>`; return; }
+        docs.forEach(doc => { const row = document.createElement("div"); row.className = "group flex items-center gap-2 rounded-xl border border-slate-700/50 bg-slate-900/30 p-3"; row.innerHTML = `<div class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-indigo-500/15 text-xs text-indigo-300">▤</div><div class="min-w-0 flex-1"><p class="truncate text-xs font-semibold text-slate-200" title="${esc(doc.source)}">${esc(doc.source)}</p><p class="mono mt-1 text-[10px] text-slate-500">${doc.chunk_count} chunks</p></div><button class="delete rounded-lg p-2 text-slate-500 opacity-0 transition hover:bg-rose-500/15 hover:text-rose-300 group-hover:opacity-100" title="Delete">×</button>`; row.querySelector(".delete").onclick = () => removeDocument(doc.source); $("documents").appendChild(row); });
+      } catch (error) { toast(error.message, true); }
+    }
+    async function removeDocument(source) { if (!confirm(`Delete "${source}"?`)) return; try { await jsonFetch(`/documents/${encodeURIComponent(source)}`, { method: "DELETE" }); toast("Document deleted"); await refreshDocuments(); await checkHealth(); } catch (error) { toast(error.message, true); } }
+    function upload(file) {
+      if (!file) return; if (file.size > 50 * 1024 * 1024) { toast("File is larger than 50 MB.", true); return; }
+      const xhr = new XMLHttpRequest(); const wrap = $("progressWrap"); wrap.classList.remove("hidden"); $("fileName").textContent = file.name; xhr.open("POST", API + "/upload");
+      xhr.upload.onprogress = event => { if (!event.lengthComputable) return; const percent = Math.round(event.loaded / event.total * 100); $("progress").style.width = `${percent}%`; $("progressText").textContent = `${percent}%`; };
+      xhr.onload = async () => { wrap.classList.add("hidden"); let data = {}; try { data = JSON.parse(xhr.responseText); } catch (_) {} if (xhr.status >= 200 && xhr.status < 300) { toast(`${data.filename} ingested (${data.chunks_processed} chunks)`); await refreshDocuments(); await checkHealth(); } else toast(data.detail || "Upload failed", true); };
+      xhr.onerror = () => { wrap.classList.add("hidden"); toast("Could not reach the local API.", true); };
+      const body = new FormData(); body.append("file", file); xhr.send(body);
+    }
+    async function checkHealth() { try { const data = await jsonFetch("/health"); const good = data.status === "healthy"; $("healthDot").className = `h-2 w-2 rounded-full ${good ? "bg-emerald-400 animate-pulse" : data.status === "degraded" ? "bg-amber-400" : "bg-rose-400"}`; $("healthText").textContent = good ? "All systems ready" : data.status === "degraded" ? "Ollama needs attention" : "Offline"; } catch (_) { $("healthDot").className = "h-2 w-2 rounded-full bg-rose-400"; $("healthText").textContent = "Offline"; } }
+    $("file").onchange = event => upload(event.target.files[0]); ["dragenter", "dragover"].forEach(type => $("drop").addEventListener(type, event => { event.preventDefault(); $("drop").classList.add("border-indigo-400", "bg-indigo-500/10"); })); ["dragleave", "drop"].forEach(type => $("drop").addEventListener(type, event => { event.preventDefault(); $("drop").classList.remove("border-indigo-400", "bg-indigo-500/10"); })); $("drop").ondrop = event => upload(event.dataTransfer.files[0]);
+    $("form").onsubmit = async event => { event.preventDefault(); const input = $("question"); const question = input.value.trim(); if (!question || $("typing").classList.contains("flex")) return; addMessage("user", question); input.value = ""; input.style.height = "auto"; $("typing").classList.replace("hidden", "flex"); $("send").disabled = true; try { const data = await jsonFetch("/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, limit: 6 }) }); addMessage("assistant", data.answer, data.sources || []); } catch (error) { toast(error.message, true); addMessage("assistant", "I could not reach the local AI service. Please check Ollama and try again."); } finally { $("typing").classList.replace("flex", "hidden"); $("send").disabled = false; } };
+    $("question").oninput = event => { event.target.style.height = "auto"; event.target.style.height = `${Math.min(event.target.scrollHeight, 144)}px`; }; $("question").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("form").requestSubmit(); } };
+    $("reset").onclick = () => { $("chat").innerHTML = `<div id="welcome" class="flex h-full flex-col items-center justify-center text-center"><div class="mb-5 grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-indigo-500 to-fuchsia-600 text-3xl">✦</div><h2 class="text-2xl font-extrabold">Ask your documents anything</h2><p class="mt-3 text-sm text-slate-400">Your next grounded conversation starts here.</p></div>`; };
+    $("theme").onclick = () => { document.documentElement.classList.toggle("light"); document.body.classList.toggle("light"); localStorage.theme = document.body.classList.contains("light") ? "light" : "dark"; };
+    if (localStorage.theme === "light") { document.documentElement.classList.add("light"); document.body.classList.add("light"); } refreshDocuments(); checkHealth(); setInterval(checkHealth, 10000);
+  </script>
+</body>
+</html>

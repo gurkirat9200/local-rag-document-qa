@@ -1,0 +1,12 @@
+# Python / Virtual Environment
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+
+# Local RAG Data & Vector Store (Generated at runtime)
+data/
+
+# Local Ollama installation and model files
+ollama/
